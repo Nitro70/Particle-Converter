@@ -58,9 +58,18 @@
 
     <system:String x:Key="UsePreview">プレビュー</system:String>
 
+    <system:String x:Key="ParticleOptions">パーティクルオプション (SNBT)</system:String>
+    <system:String x:Key="CommandPreview">生成されるコマンド</system:String>
+
     <system:String x:Key="ExportSettings">出力設定</system:String>
+    <system:String x:Key="McVersion">対象バージョン</system:String>
+    <system:String x:Key="ExportAsDatapack">データパックとして出力</system:String>
+    <system:String x:Key="DatapackNamespace">名前空間</system:String>
+    <system:String x:Key="FunctionName">ファンクション名</system:String>
     <system:String x:Key="ExportFolder">出力先フォルダ</system:String>
     <system:String x:Key="Export">出力!</system:String>
+    <system:String x:Key="ExportedRunThis">ゲーム内で実行:</system:String>
+    <system:String x:Key="ExportedWroteFile">出力先:</system:String>
 
     <system:String x:Key="ParticleCounterAlert">
         パーティクルの量が多すぎます。

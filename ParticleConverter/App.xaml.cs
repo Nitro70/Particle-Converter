@@ -16,8 +16,16 @@ namespace ParticleConverter
 
         void App_DispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
         {
-            MessageBox.Show(e.Exception.ToString());
             Logger.WriteExceptionLog(e.Exception);
+            MessageBox.Show(
+                e.Exception.ToString(),
+                "Particle Converter",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+
+            // Marking it handled keeps the window open. Without this the app reported the error
+            // and then exited, losing whatever the user had set up.
+            e.Handled = true;
         }
     }
 }

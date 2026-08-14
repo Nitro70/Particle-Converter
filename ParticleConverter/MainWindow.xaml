@@ -1,4 +1,4 @@
-﻿<Window
+<Window
     x:Class="ParticleConverter.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -10,9 +10,9 @@
     Name="mainWindow"
     Title="{DynamicResource WindowTitle}"
     Width="640"
-    Height="485"
+    Height="655"
     MinWidth="640"
-    MinHeight="495"
+    MinHeight="620"
     AllowsTransparency="True"
     Background="{DynamicResource MaterialDesignPaper}"
     FontFamily="{DynamicResource MaterialDesignFont}"
@@ -48,10 +48,12 @@
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="lang/ja-JP.xaml" />
-                <ResourceDictionary Source="data/Particles.xaml" />
             </ResourceDictionary.MergedDictionaries>
 
-            <ResourceDictionary x:Key="ParticleList" Source="data/Particles.xaml" />
+            <!--
+                The particle list used to be a hardcoded array in data/Particles.xaml. It is now
+                built in code from Minecraft.ParticleRegistry and filtered to the selected version.
+            -->
 
             <Style x:Key="WindowMainPanelStyle" TargetType="{x:Type Panel}">
                 <Setter Property="Margin" Value="0" />
@@ -519,9 +521,7 @@
                                             materialDesign:HintAssist.Hint="{DynamicResource ParticleType}"
                                             materialDesign:HintAssist.IsFloating="True"
                                             IsEditable="True"
-                                            ItemsSource="{StaticResource Particles}"
-                                            Loaded="ComboBox_Loaded"
-                                            SelectedValue="dust" />
+                                            Loaded="ComboBox_Loaded" />
                                         <StackPanel Margin="5,0" Orientation="Horizontal">
                                             <ComboBox
                                                 Name="DisplayModeBox"
@@ -583,6 +583,36 @@
                                                 VerticalAlignment="Bottom"
                                                 IsEnabled="{Binding ElementName=UseStaticDustColor, Path=IsChecked}" />
                                         </StackPanel>
+
+                                        <!--  ブロック・アイテム・生SNBT (パーティクル種別に応じて表示)  -->
+                                        <TextBox
+                                            Name="ParticleOptionsBox"
+                                            Width="290"
+                                            Margin="5,10,0,0"
+                                            HorizontalAlignment="Left"
+                                            materialDesign:HintAssist.FloatingScale="0.90"
+                                            materialDesign:HintAssist.Hint="{DynamicResource ParticleOptions}"
+                                            materialDesign:HintAssist.IsFloating="True"
+                                            LostFocus="ParticleOptionsBox_LostFocus"
+                                            Style="{StaticResource MaterialDesignFloatingHintTextBox}"
+                                            Visibility="Collapsed" />
+
+                                        <!--  生成されるコマンドのプレビュー  -->
+                                        <TextBlock
+                                            Margin="0,15,0,0"
+                                            Style="{StaticResource MaterialDesignBody2TextBlock}"
+                                            Text="{DynamicResource CommandPreview}" />
+                                        <TextBox
+                                            Name="CommandPreviewBox"
+                                            Width="290"
+                                            Margin="5,5,0,10"
+                                            HorizontalAlignment="Left"
+                                            VerticalAlignment="Top"
+                                            FontFamily="Consolas"
+                                            FontSize="11"
+                                            Foreground="{DynamicResource PrimaryHueLightBrush}"
+                                            IsReadOnly="True"
+                                            TextWrapping="Wrap" />
                                     </StackPanel>
                                 </Expander>
                             </StackPanel>
@@ -629,8 +659,13 @@
                     Grid.Column="1"
                     Margin="5,0,10,10">
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="*" MinHeight="220" />
-                        <RowDefinition Height="*" MinHeight="170" />
+                        <!--
+                            The export row grew when the version, namespace and result controls
+                            were added; its MinHeight has to cover the whole panel or the
+                            bottom-aligned StackPanel gets clipped at the top.
+                        -->
+                        <RowDefinition Height="*" MinHeight="200" />
+                        <RowDefinition Height="*" MinHeight="300" />
                     </Grid.RowDefinitions>
                     <Grid Grid.Row="0" Background="#333333">
                         <ht:Viewport3DX
@@ -695,10 +730,63 @@
                         VerticalAlignment="Bottom">
 
                         <TextBlock Style="{StaticResource MaterialDesignSubtitle1TextBlock}" Text="{DynamicResource ExportSettings}" />
+
+                        <!--  対象バージョン  -->
+                        <ComboBox
+                            Name="McVersionBox"
+                            Width="265"
+                            Margin="5,15,0,0"
+                            HorizontalAlignment="Left"
+                            materialDesign:ComboBoxAssist.ShowSelectedItem="True"
+                            materialDesign:HintAssist.FloatingScale="0.90"
+                            materialDesign:HintAssist.Hint="{DynamicResource McVersion}"
+                            materialDesign:HintAssist.IsFloating="True"
+                            DisplayMemberPath="DisplayName"
+                            SelectionChanged="McVersionBox_SelectionChanged" />
+
+                        <CheckBox
+                            Name="ExportAsDatapackBox"
+                            Margin="5,12,0,0"
+                            HorizontalAlignment="Left"
+                            Checked="ExportAsDatapackBox_Changed"
+                            Content="{DynamicResource ExportAsDatapack}"
+                            IsChecked="True"
+                            Unchecked="ExportAsDatapackBox_Changed" />
+
+                        <!--  データパックの名前空間と関数名  -->
+                        <StackPanel
+                            Name="DatapackNamePanel"
+                            Margin="5,8,0,0"
+                            HorizontalAlignment="Left"
+                            Orientation="Horizontal">
+                            <TextBox
+                                Name="NamespaceBox"
+                                Width="110"
+                                materialDesign:HintAssist.FloatingScale="0.90"
+                                materialDesign:HintAssist.Hint="{DynamicResource DatapackNamespace}"
+                                materialDesign:HintAssist.IsFloating="True"
+                                LostFocus="DatapackNameBox_LostFocus"
+                                Style="{StaticResource MaterialDesignFloatingHintTextBox}"
+                                Text="particles" />
+                            <TextBlock
+                                Margin="6,0,6,4"
+                                VerticalAlignment="Bottom"
+                                Foreground="DarkGray"
+                                Text=":" />
+                            <TextBox
+                                Name="FunctionNameBox"
+                                Width="143"
+                                materialDesign:HintAssist.FloatingScale="0.90"
+                                materialDesign:HintAssist.Hint="{DynamicResource FunctionName}"
+                                materialDesign:HintAssist.IsFloating="True"
+                                LostFocus="DatapackNameBox_LostFocus"
+                                Style="{StaticResource MaterialDesignFloatingHintTextBox}" />
+                        </StackPanel>
+
                         <!--  ファイルパス  -->
                         <StackPanel
                             Grid.RowSpan="2"
-                            Margin="5,20,0,0"
+                            Margin="5,12,0,0"
                             HorizontalAlignment="Left"
                             VerticalAlignment="Top"
                             Orientation="Horizontal">
@@ -734,6 +822,27 @@
                             Click="ExportButton_Click"
                             Content="{DynamicResource Export}"
                             Style="{StaticResource MaterialDesignRaisedButton}" />
+
+                        <!--
+                            書き出し後に、ゲーム内で実行するコマンドを表示。
+                            Hidden rather than Collapsed so the panel does not change height when
+                            it appears - this panel is bottom-aligned, so growing would push the
+                            Export Settings header off the top of the column.
+                        -->
+                        <TextBox
+                            Name="ExportResultBox"
+                            Width="265"
+                            Height="32"
+                            Margin="5,10,0,0"
+                            HorizontalAlignment="Left"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            FontFamily="Consolas"
+                            FontSize="11"
+                            Foreground="{DynamicResource PrimaryHueLightBrush}"
+                            IsReadOnly="True"
+                            TextWrapping="Wrap"
+                            Visibility="Hidden" />
                     </StackPanel>
                 </Grid>
             </Grid>

@@ -14,7 +14,13 @@
                     BaseTheme="Dark"
                     PrimaryColor="Green"
                     SecondaryColor="Lime" />
-                <ResourceDictionary Source="pack://application:,,,/MaterialDesignThemes.Wpf;component/Themes/MaterialDesignTheme.Defaults.xaml" />
+                <!--
+                    MaterialDesignThemes 5.x split its defaults into MaterialDesign2 and
+                    MaterialDesign3 variants and dropped the old MaterialDesignTheme.Defaults.xaml.
+                    The 2 variant is the look this app was designed against, so its layout and
+                    custom styles still line up.
+                -->
+                <ResourceDictionary Source="pack://application:,,,/MaterialDesignThemes.Wpf;component/Themes/MaterialDesign2.Defaults.xaml" />
                 <ResourceDictionary Source="styles/ScrollBar.xaml" />
             </ResourceDictionary.MergedDictionaries>
             <!--  GridSplitter  -->

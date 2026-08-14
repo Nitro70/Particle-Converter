@@ -1,49 +1,43 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <StartupObject>ParticleConverter.App</StartupObject>
-    <SignAssembly>true</SignAssembly>
-    <AssemblyOriginatorKeyFile>kemo14331.pfx</AssemblyOriginatorKeyFile>
-    <DelaySign>false</DelaySign>
-    <Copyright>Kemo431</Copyright>
-    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
-    <Authors>Kemo431</Authors>
-    <PackageLicenseFile>LICENSE</PackageLicenseFile>
-    <Deterministic>false</Deterministic>
-    <RepositoryUrl>https://github.com/kemo14331/Particle-Converter</RepositoryUrl>
-    <PackageIcon>icon.png</PackageIcon>
-    <ApplicationIcon>icon.ico</ApplicationIcon>
-    <AssemblyVersion>1.0.4.*</AssemblyVersion>
-    <Version>1.0.4</Version>
-    <FileVersion>1.0.4</FileVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Nullable>disable</Nullable>
+    <LangVersion>12</LangVersion>
+    <Platforms>AnyCPU</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
     <Configurations>Debug;Release</Configurations>
+    <ApplicationIcon>icon.ico</ApplicationIcon>
+    <PackageIcon>icon.png</PackageIcon>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <RepositoryUrl>https://github.com/kemo14331/Particle-Converter</RepositoryUrl>
+    <Authors>Kemo431</Authors>
+    <Copyright>Kemo431</Copyright>
+    <AssemblyVersion>2.0.0.0</AssemblyVersion>
+    <FileVersion>2.0.0.0</FileVersion>
+    <Version>2.0.0</Version>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  <PropertyGroup Condition="'$(Configuration)'=='Release'">
     <DebugType>none</DebugType>
     <DebugSymbols>false</DebugSymbols>
     <DefineConstants>TRACE</DefineConstants>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-  </PropertyGroup>
-
   <ItemGroup>
-    <PackageReference Include="HelixToolkit.SharpDX.Core.Wpf" Version="2.13.0" />
-    <PackageReference Include="MaterialDesignThemes" Version="3.2.0" />
-    <PackageReference Include="OpenCV" Version="2.4.11" />
-    <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="5.0.0" />
-    <PackageReference Include="WindowsAPICodePack-Shell" Version="1.1.1" />
+    <PackageReference Include="HelixToolkit.SharpDX.Core.Wpf" Version="2.27.3" />
+    <PackageReference Include="MaterialDesignThemes" Version="5.3.2" />
+    <PackageReference Include="OpenCvSharp4" Version="4.13.0.20260627" />
+    <PackageReference Include="OpenCvSharp4.runtime.win" Version="4.13.0.20260627" />
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="images\particles\" />
-    <Folder Include="functions\" />
+    <InternalsVisibleTo Include="ParticleConverter.Tests" />
   </ItemGroup>
 
   <ItemGroup>
@@ -55,12 +49,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="OpenCvSharpExtern.dll">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
-    <None Update="OpenCvSharpExtern.dll">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
     <None Update="Settings.settings">
       <Generator>SettingsSingleFileGenerator</Generator>
       <LastGenOutput>Settings.Designer.cs</LastGenOutput>
@@ -76,23 +64,20 @@
     </None>
   </ItemGroup>
 
+  <!--
+    The language files are compiled as Pages (so ResourceDictionary Source="lang/xx.xaml"
+    resolves) *and* copied to the output directory, because Load_Language enumerates
+    lang\*.xaml on disk to build the language dropdown. Both are required.
+  -->
   <ItemGroup>
-    <Reference Include="OpenCvSharp">
-      <HintPath>..\..\..\..\..\Desktop\a\OpenCvSharp.dll</HintPath>
-    </Reference>
-  </ItemGroup>
-
-  <ItemGroup>
-    <Page Update="lang\en-US.xaml">
+    <Page Update="lang\*.xaml">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </Page>
-    <Page Update="lang\ja-JP.xaml">
-      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
-    </Page>
+    <LangFile Include="lang\*.xaml" />
   </ItemGroup>
 
-  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-    <Exec Command="xcopy &quot;$(ProjectDir)\lang\*&quot; &quot;$(TargetDir)\lang&quot; /e /y /i" />
+  <Target Name="CopyLanguageFiles" AfterTargets="Build">
+    <Copy SourceFiles="@(LangFile)" DestinationFolder="$(TargetDir)lang" SkipUnchangedFiles="true" />
   </Target>
 
 </Project>

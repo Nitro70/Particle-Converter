@@ -1,7 +1,7 @@
 ﻿using HelixToolkit.SharpDX.Core;
 using MaterialDesignThemes.Wpf;
 using Microsoft.Win32;
-using Microsoft.WindowsAPICodePack.Dialogs;
+using ParticleConverter.Minecraft;
 using ParticleConverter.util;
 using SharpDX;
 using System;
@@ -36,6 +36,9 @@ namespace ParticleConverter
         // CultureInfo.InvariantCultureでen-USの書式を取得
         private readonly NumberFormatInfo format = CultureInfo.InvariantCulture.NumberFormat;
 
+        /// <summary>Suppresses change handlers while the constructor populates controls.</summary>
+        private bool isInitialising = true;
+
         public MainWindow()
         {
             InitializeComponent();
@@ -45,9 +48,30 @@ namespace ParticleConverter
                 CultureInfo.CurrentCulture = new CultureInfo("en-US", false);
             }
             Load_Langugae();
+            Load_McVersions();
             ColorCodeBox_TextChanged(ColorCodeBox, null);
             FolderPathBox.Text = Settings.Default.FolderPath;
+            NamespaceBox.Text = Settings.Default.Namespace;
+            ExportAsDatapackBox.IsChecked = Settings.Default.ExportAsDatapack;
+
+            ParticleTypeBox.SelectionChanged += ParticleTypeBox_Changed;
+            ParticleTypeBox.LostFocus += ParticleTypeBox_Changed;
+
+            isInitialising = false;
+            Refresh_ParticleTypes();
+            Update_CommandPreview();
         }
+
+        /// <summary>Fills the version dropdown and restores the last selection.</summary>
+        private void Load_McVersions()
+        {
+            McVersionBox.ItemsSource = McVersionProfile.All;
+            McVersionBox.SelectedItem = McVersionProfile.ById(Settings.Default.McVersion);
+        }
+
+        /// <summary>The version currently selected in the dropdown.</summary>
+        private McVersionProfile SelectedVersion =>
+            McVersionBox?.SelectedItem as McVersionProfile ?? McVersionProfile.Latest;
         private void Load_Langugae()
         {
             try
@@ -158,16 +182,29 @@ namespace ParticleConverter
             }
         }
 
+        // Loaded fires again whenever WPF re-attaches an element to the visual tree, which the
+        // Expander does to its content. These handlers therefore have to be idempotent: the
+        // original code used Dictionary.Add and += unconditionally, so opening "More Settings"
+        // threw a duplicate-key ArgumentException and took the whole app down with it.
+
         private void FilterTextBox_Loaded(object sender, RoutedEventArgs e)
         {
             TextBox sb = (TextBox)sender;
+            sb.KeyDown -= EnterKey_Down;
             sb.KeyDown += EnterKey_Down;
-            oldValues.Add(sb.Name, sb.Text);
+
+            // Keep the first value seen - it is the baseline a rejected edit reverts to.
+            if (!oldValues.ContainsKey(sb.Name))
+            {
+                oldValues[sb.Name] = sb.Text;
+            }
         }
 
         private void CheckBox_Loaded(object sender, RoutedEventArgs e)
         {
             CheckBox cb = (CheckBox)sender;
+            cb.Checked -= CheckBox_Check_Changed;
+            cb.Unchecked -= CheckBox_Check_Changed;
             cb.Checked += CheckBox_Check_Changed;
             cb.Unchecked += CheckBox_Check_Changed;
         }
@@ -180,6 +217,7 @@ namespace ParticleConverter
         private void ComboBox_Loaded(object sender, RoutedEventArgs e)
         {
             ComboBox cb = (ComboBox)sender;
+            cb.SelectionChanged -= Combobox_Selection_Changed;
             cb.SelectionChanged += Combobox_Selection_Changed;
         }
 
@@ -190,6 +228,10 @@ namespace ParticleConverter
 
         private void Update_Preview()
         {
+            // The command preview does not depend on an image being loaded, so refresh it
+            // regardless of whether the 3D preview below runs.
+            Update_CommandPreview();
+
             try
             {
                 if (ImageConverter.IsLoaded && UsePreviewBox.IsChecked.Value)
@@ -292,12 +334,12 @@ namespace ParticleConverter
             }
             catch (Exception e)
             {
+                // A preview failure is not fatal - report it and leave the window usable.
                 Logger.WriteExceptionLog(e);
-                MessageBox.Show("プレビューの更新に失敗しました\nFailed to update preview.",
+                MessageBox.Show($"プレビューの更新に失敗しました\nFailed to update preview.\n\n{e.Message}",
                     "エラー/Error",
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);
-                this.Close();
             }
         }
 
@@ -389,6 +431,14 @@ namespace ParticleConverter
             try
             {
                 ImageConverter.Load(FilePathBox.Text);
+
+                // Seed the function name from the image, the way the old export named its file.
+                if (string.IsNullOrWhiteSpace(FunctionNameBox.Text))
+                {
+                    FunctionNameBox.Text = McResourceLocation.SanitizePath(
+                        System.IO.Path.GetFileNameWithoutExtension(FilePathBox.Text));
+                }
+
                 if (AutoSizeBox.IsChecked.Value)
                 {
                     Sync_SizeBoxes();
@@ -412,12 +462,12 @@ namespace ParticleConverter
             }
             catch (Exception e)
             {
-                MessageBox.Show("画像ファイルの読み込みに失敗しました\nFailed to load an image file",
+                // An unreadable image should not close the app - the user can pick another one.
+                MessageBox.Show($"画像ファイルの読み込みに失敗しました\nFailed to load an image file.\n\n{e.Message}",
                 "エラー/Error",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
                 Logger.WriteExceptionLog(e);
-                this.Close();
             }
         }
 
@@ -536,18 +586,184 @@ namespace ParticleConverter
         }
 
 
+        /// <summary>
+        /// Validates the particle size against the range vanilla actually accepts.
+        /// </summary>
+        /// <remarks>
+        /// This box used to reject anything above 1.00, which is why the usual advice was to
+        /// export at 1.0 and find-and-replace the number in a text editor afterwards. The real
+        /// dust scale range is 0.01 to 4.0; from 1.20.5 a value outside it is a parse error
+        /// rather than being clamped, so the command would silently never run.
+        /// </remarks>
         private void ParticleSizeBox_LostFocus(object sender, RoutedEventArgs e)
         {
             TextBox sb = (TextBox)sender;
-            if (decimal.TryParse(sb.Text, out decimal d) && d <= decimal.Parse("1.00") && d > 0)
+            if (double.TryParse(sb.Text, NumberStyles.Float, format, out double d)
+                && d >= ParticleCommandSettings.MinScale
+                && d <= ParticleCommandSettings.MaxScale)
             {
                 oldValues[sb.Name] = sb.Text;
                 Update_Preview();
+                Update_CommandPreview();
             }
             else
             {
                 SystemSounds.Beep.Play();
                 sb.Text = oldValues[sb.Name];
+            }
+        }
+
+        private void McVersionBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (isInitialising) return;
+
+            Settings.Default.McVersion = SelectedVersion.Id;
+            Settings.Default.Save();
+            Refresh_ParticleTypes();
+            Update_CommandPreview();
+        }
+
+        private void ExportAsDatapackBox_Changed(object sender, RoutedEventArgs e)
+        {
+            if (isInitialising || DatapackNamePanel == null) return;
+
+            bool asDatapack = ExportAsDatapackBox.IsChecked == true;
+            DatapackNamePanel.IsEnabled = asDatapack;
+            Settings.Default.ExportAsDatapack = asDatapack;
+            Settings.Default.Save();
+        }
+
+        /// <summary>Forces namespace and function name to characters Minecraft allows.</summary>
+        private void DatapackNameBox_LostFocus(object sender, RoutedEventArgs e)
+        {
+            TextBox sb = (TextBox)sender;
+            sb.Text = sender == NamespaceBox
+                ? McResourceLocation.SanitizeNamespace(sb.Text)
+                : McResourceLocation.SanitizePath(sb.Text);
+
+            if (sender == NamespaceBox && sb.Text.Length > 0)
+            {
+                Settings.Default.Namespace = sb.Text;
+                Settings.Default.Save();
+            }
+        }
+
+        private void ParticleOptionsBox_LostFocus(object sender, RoutedEventArgs e)
+        {
+            Update_CommandPreview();
+        }
+
+        private void ParticleTypeBox_Changed(object sender, RoutedEventArgs e)
+        {
+            Update_ParticleOptionsVisibility();
+            Update_CommandPreview();
+        }
+
+        /// <summary>
+        /// Repopulates the particle dropdown for the selected version, keeping the current
+        /// selection if that particle still exists.
+        /// </summary>
+        private void Refresh_ParticleTypes()
+        {
+            string previous = ParticleTypeBox.Text;
+
+            var ids = new List<string>();
+            foreach (ParticleDefinition d in ParticleRegistry.ForVersion(SelectedVersion))
+            {
+                ids.Add(d.Id);
+            }
+
+            ParticleTypeBox.ItemsSource = ids;
+
+            if (!string.IsNullOrEmpty(previous) && ids.Contains(previous))
+            {
+                ParticleTypeBox.SelectedItem = previous;
+            }
+            else
+            {
+                // dust is the only particle that can carry an image's colours.
+                ParticleTypeBox.SelectedItem = ids.Contains("dust") ? "dust" : ids[0];
+            }
+
+            Update_ParticleOptionsVisibility();
+        }
+
+        /// <summary>
+        /// Shows the options box only for particles that need a value this tool cannot derive
+        /// from the image, and seeds it with something valid.
+        /// </summary>
+        private void Update_ParticleOptionsVisibility()
+        {
+            if (ParticleOptionsBox == null) return;
+
+            ParticleOptionKind kind = ParticleRegistry.OptionKindOf(ParticleTypeBox.Text);
+            bool needsInput = kind == ParticleOptionKind.BlockState
+                              || kind == ParticleOptionKind.Item
+                              || kind == ParticleOptionKind.Raw;
+
+            ParticleOptionsBox.Visibility = needsInput ? Visibility.Visible : Visibility.Collapsed;
+
+            if (needsInput && string.IsNullOrWhiteSpace(ParticleOptionsBox.Text))
+            {
+                ParticleOptionsBox.Text = kind == ParticleOptionKind.Raw ? "" : "minecraft:stone";
+            }
+        }
+
+        /// <summary>Builds the command settings that both the preview and the export use.</summary>
+        private ParticleCommandSettings BuildCommandSettings()
+        {
+            Color fixedColor = Colors.Red;
+            try
+            {
+                fixedColor = (Color)ColorConverter.ConvertFromString(ColorCodeBox.Text);
+            }
+            catch
+            {
+                // An unparseable colour code falls back to red rather than blocking the preview.
+            }
+
+            double scale = ParticleCommandSettings.MinScale;
+            if (double.TryParse(ParticleSizeBox.Text, NumberStyles.Float, format, out double parsed))
+            {
+                scale = parsed;
+            }
+
+            string options = ParticleOptionsBox?.Text ?? "";
+            ParticleOptionKind kind = ParticleRegistry.OptionKindOf(ParticleTypeBox.Text);
+
+            return new ParticleCommandSettings
+            {
+                Version = SelectedVersion,
+                ParticleId = ParticleTypeBox.Text,
+                Scale = scale,
+                UseFixedColor = UseStaticDustColor.IsChecked == true,
+                FixedColor = new McColor(fixedColor.R, fixedColor.G, fixedColor.B),
+                BlockState = kind == ParticleOptionKind.BlockState && options.Length > 0 ? options : "minecraft:stone",
+                Item = kind == ParticleOptionKind.Item && options.Length > 0 ? options : "minecraft:stone",
+                RawOptions = kind == ParticleOptionKind.Raw ? options : "",
+                CoordinateMode = (string)((ComboBoxItem)CoordinateModeBox.SelectedItem)?.Tag == "Local"
+                    ? Minecraft.CoordinateMode.RelativeLocal
+                    : Minecraft.CoordinateMode.RelativeWorld,
+                DisplayMode = (string)((ComboBoxItem)DisplayModeBox.SelectedItem)?.Tag == "force"
+                    ? ParticleDisplayMode.Force
+                    : ParticleDisplayMode.Normal,
+                Viewers = ParticleViewerBox.Text,
+            };
+        }
+
+        /// <summary>Shows one representative command so the emitted syntax is visible before export.</summary>
+        private void Update_CommandPreview()
+        {
+            if (isInitialising || CommandPreviewBox == null) return;
+
+            try
+            {
+                ParticleCommandSettings settings = BuildCommandSettings();
+                CommandPreviewBox.Text = ParticleCommand.Build(0, 1, 0, new McColor(255, 0, 0), settings);
+            }
+            catch (Exception ex)
+            {
+                CommandPreviewBox.Text = ex.Message;
             }
         }
 
@@ -571,116 +787,167 @@ namespace ParticleConverter
 
         private void BrowsFolderButton_Click(object sender, RoutedEventArgs e)
         {
-            var dialog = new CommonOpenFileDialog
-            {
-                IsFolderPicker = true
-            };
+            // OpenFolderDialog is built into WPF from .NET 8, which is why the old
+            // WindowsAPICodePack-Shell dependency is gone.
+            var dialog = new OpenFolderDialog();
 
-            if (dialog.ShowDialog() == CommonFileDialogResult.Ok)
+            if (dialog.ShowDialog() == true)
             {
-                FolderPathBox.Text = dialog.FileName;
-                Settings.Default.FolderPath = dialog.FileName;
+                FolderPathBox.Text = dialog.FolderName;
+                Settings.Default.FolderPath = dialog.FolderName;
                 Settings.Default.Save();
             }
         }
 
         private async void ExportButton_Click(object sender, RoutedEventArgs e)
         {
-            if (ImageConverter.IsLoaded)
-            {
-                ExportButton.IsEnabled = false;
-                Options.IsEnabled = false;
-                BrowsImageButton.IsEnabled = false;
-                BrowsFolderButton.IsEnabled = false;
-                ButtonProgressAssist.SetValue(ExportButton, 0);
-                int coord = CoordinateAxis.SelectedIndex;
-                int verAlig = VerticalAlignmentBox.SelectedIndex;
-                int horAlig = HorizontalAlignmentBox.SelectedIndex;
-                Particle[] particles = ImageConverter.GetParticles(coord, verAlig, horAlig);
-                ButtonProgressAssist.SetMaximum(ExportButton, particles.Length + 20);
-                ButtonProgressAssist.SetValue(ExportButton, 20);
-                ExportButton.UpdateLayout();
-                string fileName = System.IO.Path.GetFileNameWithoutExtension(FilePathBox.Text);
-                string filePath = FolderPathBox.Text + "\\" + fileName.ToLower() + ".mcfunction";
-                Encoding enc = new System.Text.UTF8Encoding(); ;
-                StreamWriter writer = null;
-                try
-                {
-                    string cs = "~";
-                    switch (((ComboBoxItem)CoordinateModeBox.SelectedItem).Tag)
-                    {
-                        case "Relative":
-                            cs = "~";
-                            break;
-                        case "Local":
-                            cs = "^";
-                            break;
-                    }
-                    if (!Directory.Exists(System.IO.Path.GetDirectoryName(filePath)))
-                    {
-                        Directory.CreateDirectory(System.IO.Path.GetDirectoryName(filePath));
-                    }
-                    var fullname = typeof(App).Assembly.Location;
-                    var info = FileVersionInfo.GetVersionInfo(fullname);
-                    var ver = info.FileVersion;
-                    writer = new StreamWriter(filePath, false, enc);
-                    writer.WriteLine($"### Particle Image Function");
-                    writer.WriteLine($"### Version: {ver}");
-                    writer.WriteLine($"### Width: {ImageConverter.ResizedWidth}");
-                    writer.WriteLine($"### Height: {ImageConverter.ResizedHeight}");
-                    writer.WriteLine($"### ParticleType: {ParticleTypeBox.SelectedValue}");
-                    writer.WriteLine($"");
-                    writer.WriteLine($"### This file was generated by Kemo431's Particle-Converter.");
-                    writer.WriteLine($"### Download Link: https://github.com/kemo14331/Particle-Converter");
-                    writer.WriteLine($"");
-                    for (int i = 0; i < particles.Length; i++)
-                    {
-                        var p = particles[i];
-                        string axis = $"{cs}{Math.Round(p.x, 7).ToString("R", format)} {cs}{Math.Round(p.y, 7).ToString("R", format)} {cs}{Math.Round(p.z, 7).ToString("R", format)}";
-                        string particle = "minecraft:" + ParticleTypeBox.Text;
-                        if (ParticleTypeBox.SelectedValue.Equals("dust"))
-                        {
-                            if (UseStaticDustColor.IsChecked.Value)
-                            {
-                                Color color = (Color)ColorConverter.ConvertFromString(ColorCodeBox.Text);
-                                particle += $" {Math.Round(color.R / 255.0d, 2).ToString("R", format)} {Math.Round(color.G / 255.0d, 2).ToString("R", format)} {Math.Round(color.B / 255.0d, 2).ToString("R", format)} {double.Parse(ParticleSizeBox.Text).ToString("R", format)}";
-                            }
-                            else
-                            {
-                                particle += $" {Math.Round(p.r / 255.0d, 2).ToString("R", format)} {Math.Round(p.g / 255.0d, 2).ToString("R", format)} {Math.Round(p.b / 255.0d, 2).ToString("R", format)} {double.Parse(ParticleSizeBox.Text).ToString("R", format)}";
-                            }
-                        }
-                        string particleString = $"particle {particle} {axis} 0 0 0 0 1 {((ComboBoxItem)DisplayModeBox.SelectedItem).Tag} {ParticleViewerBox.Text}";
-                        await Task.Run(() =>
-                        {
-                            writer.WriteLine(particleString);
-                        });
-                        ButtonProgressAssist.SetValue(ExportButton, 20 + 1 + i);
-                    }
-                }
-                catch (Exception exc)
-                {
-                    MessageBox.Show("ファイルの書き込みに失敗しました\nFailed to export a file.",
-                        "エラー/Error",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Error);
-                    Logger.WriteExceptionLog(exc);
-                }
-                finally
-                {
-                    if (writer != null) writer.Close();
-                }
-                ButtonProgressAssist.SetValue(ExportButton, 0);
-                Options.IsEnabled = true;
-                ExportButton.IsEnabled = true;
-                BrowsImageButton.IsEnabled = true;
-                BrowsFolderButton.IsEnabled = true;
-                SystemSounds.Beep.Play();
-            }
-            else
+            if (!ImageConverter.IsLoaded)
             {
                 SystemSounds.Beep.Play();
+                return;
             }
+
+            Set_ExportUiEnabled(false);
+            ButtonProgressAssist.SetMaximum(ExportButton, 100);
+            ButtonProgressAssist.SetValue(ExportButton, 0);
+            ExportResultBox.Visibility = Visibility.Hidden;
+
+            try
+            {
+                Particle[] particles = ImageConverter.GetParticles(
+                    CoordinateAxis.SelectedIndex,
+                    VerticalAlignmentBox.SelectedIndex,
+                    HorizontalAlignmentBox.SelectedIndex);
+
+                ParticleCommandSettings settings = BuildCommandSettings();
+                McVersionProfile version = SelectedVersion;
+
+                string functionName = McResourceLocation.SanitizePath(FunctionNameBox.Text);
+                if (functionName.Length == 0)
+                {
+                    functionName = McResourceLocation.SanitizePath(
+                        System.IO.Path.GetFileNameWithoutExtension(FilePathBox.Text));
+                    FunctionNameBox.Text = functionName;
+                }
+
+                DatapackLayout layout = DatapackLayout.Resolve(
+                    FolderPathBox.Text,
+                    ExportAsDatapackBox.IsChecked == true,
+                    NamespaceBox.Text,
+                    functionName,
+                    version);
+
+                string[] header = Build_FunctionHeader(particles.Length, version, layout);
+                var progress = new Progress<int>(p => ButtonProgressAssist.SetValue(ExportButton, p));
+
+                await Task.Run(() => Write_Function(layout, version, particles, settings, header, progress));
+
+                Show_ExportResult(layout);
+                SystemSounds.Beep.Play();
+            }
+            catch (Exception exc)
+            {
+                MessageBox.Show($"ファイルの書き込みに失敗しました\nFailed to export a file.\n\n{exc.Message}",
+                    "エラー/Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+                Logger.WriteExceptionLog(exc);
+            }
+            finally
+            {
+                ButtonProgressAssist.SetValue(ExportButton, 0);
+                Set_ExportUiEnabled(true);
+            }
+        }
+
+        private void Set_ExportUiEnabled(bool enabled)
+        {
+            ExportButton.IsEnabled = enabled;
+            Options.IsEnabled = enabled;
+            BrowsImageButton.IsEnabled = enabled;
+            BrowsFolderButton.IsEnabled = enabled;
+        }
+
+        private string[] Build_FunctionHeader(int particleCount, McVersionProfile version, DatapackLayout layout)
+        {
+            string appVersion = FileVersionInfo.GetVersionInfo(typeof(App).Assembly.Location).FileVersion;
+
+            var lines = new List<string>
+            {
+                "### Particle Image Function",
+                $"### Generator: Particle-Converter {appVersion}",
+                $"### Minecraft: {version.DisplayName} (pack_format {version.PackFormat}" +
+                    (version.PackFormatMinor.HasValue ? $".{version.PackFormatMinor.Value}" : "") + ")",
+                $"### Source: {System.IO.Path.GetFileName(FilePathBox.Text)}",
+                $"### Resolution: {ImageConverter.ResizedWidth}x{ImageConverter.ResizedHeight}",
+                $"### Particles: {particleCount}",
+                $"### ParticleType: {ParticleTypeBox.Text}",
+                "",
+            };
+
+            if (layout.FunctionReference != null)
+            {
+                lines.Add($"### Run with: /function {layout.FunctionReference}");
+                lines.Add("");
+            }
+
+            lines.Add("### This file was generated by Kemo431's Particle-Converter.");
+            lines.Add("### Download Link: https://github.com/kemo14331/Particle-Converter");
+            lines.Add("");
+
+            return lines.ToArray();
+        }
+
+        /// <summary>
+        /// Writes the datapack and function. Runs off the UI thread; progress is reported as a
+        /// percentage rather than per line, which is what made the original export slow.
+        /// </summary>
+        private static void Write_Function(
+            DatapackLayout layout,
+            McVersionProfile version,
+            Particle[] particles,
+            ParticleCommandSettings settings,
+            string[] header,
+            IProgress<int> progress)
+        {
+            if (layout.IsDatapack)
+            {
+                DatapackWriter.WritePackMeta(layout, version, "Particle images generated by Particle-Converter");
+            }
+
+            using (StreamWriter writer = DatapackWriter.OpenFunction(layout))
+            {
+                foreach (string line in header)
+                {
+                    writer.WriteLine(line);
+                }
+
+                int reportEvery = Math.Max(1, particles.Length / 100);
+                for (int i = 0; i < particles.Length; i++)
+                {
+                    Particle p = particles[i];
+                    writer.WriteLine(ParticleCommand.Build(p.x, p.y, p.z, new McColor(p.r, p.g, p.b), settings));
+
+                    if (i % reportEvery == 0)
+                    {
+                        progress?.Report(particles.Length == 0 ? 100 : i * 100 / particles.Length);
+                    }
+                }
+            }
+
+            progress?.Report(100);
+        }
+
+        private void Show_ExportResult(DatapackLayout layout)
+        {
+            string label = (string)(layout.FunctionReference != null
+                ? Resources["ExportedRunThis"]
+                : Resources["ExportedWroteFile"]);
+
+            ExportResultBox.Text = layout.FunctionReference != null
+                ? $"{label} /function {layout.FunctionReference}"
+                : $"{label} {layout.FunctionPath}";
+            ExportResultBox.Visibility = Visibility.Visible;
         }
 
         private void Show_DevsTwitter(object sender, RoutedEventArgs e)

@@ -58,9 +58,18 @@
 
     <system:String x:Key="UsePreview">Preview</system:String>
 
+    <system:String x:Key="ParticleOptions">Particle Options (SNBT)</system:String>
+    <system:String x:Key="CommandPreview">Generated Command</system:String>
+
     <system:String x:Key="ExportSettings">Export Settings</system:String>
+    <system:String x:Key="McVersion">Minecraft Version</system:String>
+    <system:String x:Key="ExportAsDatapack">Export as a datapack</system:String>
+    <system:String x:Key="DatapackNamespace">Namespace</system:String>
+    <system:String x:Key="FunctionName">Function name</system:String>
     <system:String x:Key="ExportFolder">ExportFolder</system:String>
     <system:String x:Key="Export">Export!!</system:String>
+    <system:String x:Key="ExportedRunThis">Run in game:</system:String>
+    <system:String x:Key="ExportedWroteFile">Wrote:</system:String>
 
     <system:String x:Key="ParticleCounterAlert">
         There are too many particles.

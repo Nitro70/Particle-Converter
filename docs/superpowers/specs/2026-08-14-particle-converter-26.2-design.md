@@ -84,8 +84,10 @@ Command generation currently lives as string concatenation inside `ExportButton_
 - **`DatapackWriter`** — emits `pack.mcmeta` + `data/<namespace>/function/<name>.mcfunction`, and
   reports the exact `/function <ns>:<name>` to run.
 
-Colour is written as a float list `[r,g,b]` by default, which parses on every SNBT-era target. A
-packed-int form is offered only on targets confirmed to accept it.
+Colour is written as a float list `[r,g,b]`, which parses on every SNBT-era target. A packed-int
+form was considered and dropped: current versions accept it, but the version it was introduced in
+could not be pinned down from the documentation, and getting that wrong would silently break
+output on older targets for no gain beyond file size.
 
 ### UI changes
 
@@ -97,12 +99,25 @@ packed-int form is offered only on targets confirmed to accept it.
 - Live preview of one generated command, so the emitted syntax is visible before export.
 - An **Options (SNBT)** field appears for particles whose `OptionKind` is `Raw`.
 
-### Bug fixed in passing
+### Bugs fixed in passing
 
-`ImageConverter.GetParticles` calls `GetGenericIndexer<Vec4b>()` unconditionally
-(`util/ImageConverter.cs:209`). A JPEG loads as `CV_8UC3`, so reading four bytes per pixel from a
-three-byte-per-pixel buffer misreads every colour and overruns the final row. `.jpg` is one of the
-two formats the file picker accepts. Fix: convert to BGRA on load.
+**Three-channel images are misread.** `ImageConverter.GetParticles` calls
+`GetGenericIndexer<Vec4b>()` unconditionally. A JPEG loads as `CV_8UC3`, so reading four bytes per
+pixel from a three-byte-per-pixel buffer misreads every colour and overruns the final row. `.jpg`
+is one of the two formats the file picker accepts. Fixed by normalising to BGRA on load.
+
+**Opening "More Settings" kills the app.** `FilterTextBox_Loaded` calls `oldValues.Add(...)`, but
+WPF re-raises `Loaded` when the Expander re-attaches its content, so the second call throws
+`ArgumentException: An item with the same key has already been added`. Latent upstream; the
+MaterialDesign 5 Expander template triggers it. The `Loaded` handlers are now idempotent.
+
+**Any UI exception closes the app.** `App_DispatcherUnhandledException` showed the error and then
+let the process die, and `Update_Preview` / `ImageFileLoad` called `this.Close()` in their catch
+blocks - so an unreadable image shut the whole tool down. These now report and carry on.
+
+**Exponential notation in coordinates.** Formatting with `"R"` turns a small offset into `1E-07`,
+which is a parse error as a coordinate. `McNumber` uses fixed-point patterns that cannot produce
+an exponent.
 
 ## Testing
 

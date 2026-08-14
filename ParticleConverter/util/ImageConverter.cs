@@ -1,6 +1,7 @@
 ﻿using OpenCvSharp;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Windows;
 
 namespace ParticleConverter.util
@@ -26,12 +27,9 @@ namespace ParticleConverter.util
     // 画像ファイルをパーティクルに変換するためのクラス
     class ImageConverter
     {
-        private Mat SourseImage; // もとの画像
-        private Particle[] _CashParticle;
+        private Mat SourseImage; // もとの画像 (常にCV_8UC4)
 
         public bool IsLoaded = false;
-
-        private bool IsPropertyChanged = true; //変更監視
 
         private int _SourseWidth;
         private int _SourseHeight;
@@ -63,31 +61,11 @@ namespace ParticleConverter.util
             Load(imagePath);
         }
 
-        private void SetProperty(ref int propety, int value)
-        {
-            if (propety != value)
-            {
-                IsPropertyChanged = true;
-                propety = value;
-            }
-        }
+        private static void SetProperty(ref int propety, int value) => propety = value;
 
-        private void SetProperty(ref double propety, double value)
-        {
-            if (propety != value)
-            {
-                IsPropertyChanged = true;
-                propety = value;
-            }
-        }
-        private void SetProperty(ref bool propety, bool value)
-        {
-            if (propety != value)
-            {
-                IsPropertyChanged = true;
-                propety = value;
-            }
-        }
+        private static void SetProperty(ref double propety, double value) => propety = value;
+
+        private static void SetProperty(ref bool propety, bool value) => propety = value;
 
 
         /// <summary>
@@ -96,12 +74,71 @@ namespace ParticleConverter.util
         /// <param name="imagePath">画像ファイルのパス</param>
         public void Load(string imagePath)
         {
-            SourseImage = new Mat(imagePath, ImreadModes.Unchanged);
+            using (Mat loaded = new Mat(imagePath, ImreadModes.Unchanged))
+            {
+                if (loaded.Empty())
+                {
+                    throw new IOException($"Could not decode an image from '{imagePath}'.");
+                }
+
+                Mat normalized = Normalize(loaded);
+                SourseImage?.Dispose();
+                SourseImage = normalized;
+            }
+
             SourseWidth = SourseImage.Width;
             SourseHeight = SourseImage.Height;
             ResizedHeight = SourseImage.Height;
             ResizedWidth = SourseImage.Width;
             IsLoaded = true;
+        }
+
+        /// <summary>
+        /// 8ビット4チャンネル(BGRA)に統一する
+        /// </summary>
+        /// <remarks>
+        /// GetParticles reads four bytes per pixel. A JPEG decodes to three channels and a
+        /// greyscale PNG to one, so without this every colour would be misread and the last row
+        /// would be read past its end. Both .jpg and .png are offered in the file picker.
+        /// 16-bit PNGs are scaled down to 8-bit for the same reason.
+        /// </remarks>
+        private static Mat Normalize(Mat source)
+        {
+            Mat depthCorrected = source;
+            bool disposeDepthCorrected = false;
+
+            if (source.Depth() != MatType.CV_8U)
+            {
+                depthCorrected = new Mat();
+                disposeDepthCorrected = true;
+                // 16U covers the common case (16-bit PNG); anything else is best-effort.
+                double scale = source.Depth() == MatType.CV_16U ? 255.0 / 65535.0 : 1.0;
+                source.ConvertTo(depthCorrected, MatType.CV_8U, scale);
+            }
+
+            try
+            {
+                Mat bgra = new Mat();
+                switch (depthCorrected.Channels())
+                {
+                    case 4:
+                        return depthCorrected.Clone();
+                    case 3:
+                        Cv2.CvtColor(depthCorrected, bgra, ColorConversionCodes.BGR2BGRA);
+                        return bgra;
+                    case 1:
+                        Cv2.CvtColor(depthCorrected, bgra, ColorConversionCodes.GRAY2BGRA);
+                        return bgra;
+                    default:
+                        bgra.Dispose();
+                        throw new NotSupportedException(
+                            $"Unsupported image with {depthCorrected.Channels()} channels.");
+                }
+            }
+            finally
+            {
+                if (disposeDepthCorrected) depthCorrected.Dispose();
+            }
         }
 
         /// <summary>
@@ -118,11 +155,16 @@ namespace ParticleConverter.util
         {
             Mat TempImage = new Mat();
             Cv2.Resize(SourseImage, TempImage, new OpenCvSharp.Size(ResizedWidth, ResizedHeight), 0, 0, InterpolationFlags.Nearest);
-            if (IsFlip) TempImage = TempImage.Flip(FlipMode.Y);
-            TempImage = GetRotatedImage(TempImage, Angle);
-            //CashMat = TempImage.Clone();
-            IsPropertyChanged = false;
-            return TempImage;
+            if (IsFlip)
+            {
+                Mat flipped = TempImage.Flip(FlipMode.Y);
+                TempImage.Dispose();
+                TempImage = flipped;
+            }
+
+            Mat rotated = GetRotatedImage(TempImage, Angle);
+            TempImage.Dispose();
+            return rotated;
         }
 
         /// <summary>
@@ -206,19 +248,29 @@ namespace ParticleConverter.util
                     break;
             }
 
-            var indexer = Image.GetGenericIndexer<Vec4b>();
-            for (int y = 0; y < Image.Height; y++)
+            // Image is always CV_8UC4 (see Normalize), so walk the rows directly rather than
+            // going through a per-pixel marshalling indexer - this runs once per preview update.
+            int height = Image.Rows;
+            int width = Image.Cols;
+            long stride = Image.Step();
+
+            unsafe
             {
-                for (int x = 0; x < Image.Width; x++)
+                byte* data = (byte*)Image.Data.ToPointer();
+                for (int y = 0; y < height; y++)
                 {
-                    Vec4b pix = indexer[y, x];
-                    if (pix[3] != 0)
+                    byte* row = data + y * stride;
+                    for (int x = 0; x < width; x++)
                     {
+                        byte* pix = row + x * 4;
+                        // Fully transparent pixels are holes in the image, not black particles.
+                        if (pix[3] == 0) continue;
+
                         Particle particle = new Particle
                         {
-                            r = pix[2],
-                            g = pix[1],
                             b = pix[0],
+                            g = pix[1],
+                            r = pix[2],
                             x = 0,
                             y = 0,
                             z = 0,
@@ -242,8 +294,8 @@ namespace ParticleConverter.util
                     }
                 }
             }
+
             Image.Dispose();
-            _CashParticle = particles.ToArray();
             return particles.ToArray();
         }
 
