@@ -76,9 +76,9 @@ namespace ParticleConverter
         {
             try
             {
-                Assembly assembly = Assembly.GetEntryAssembly();
-                string applicationDirPath = System.IO.Path.GetDirectoryName(assembly.Location);
-                DirectoryInfo di = new DirectoryInfo(applicationDirPath + "\\lang");
+                // AppContext.BaseDirectory rather than Assembly.Location, which is empty for a
+                // single-file publish.
+                DirectoryInfo di = new DirectoryInfo(System.IO.Path.Combine(AppContext.BaseDirectory, "lang"));
                 FileInfo[] files =
                     di.GetFiles("*.xaml");
                 foreach (FileInfo path in files)
@@ -89,14 +89,18 @@ namespace ParticleConverter
                     };
                     LanguageBox.Items.Add(cbi);
                 }
-                string culture = System.Globalization.CultureInfo.CurrentCulture.Name;
+
                 LanguageBox.SelectedIndex = 0;
 
-                //システムに対応する言語があったらそっちに合わせる
+                // A saved choice wins; otherwise fall back to the OS language if we ship it.
+                string preferred = !string.IsNullOrEmpty(Settings.Default.Language)
+                    ? Settings.Default.Language
+                    : System.Globalization.CultureInfo.CurrentCulture.Name;
+
                 int index = 0;
                 foreach (ComboBoxItem cbi in LanguageBox.Items)
                 {
-                    if (cbi.Content.Equals(culture))
+                    if (cbi.Content.Equals(preferred))
                     {
                         LanguageBox.SelectedIndex = index;
                     }
@@ -553,13 +557,21 @@ namespace ParticleConverter
 
         private void LanguageBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
+            string language = (string)((ComboBoxItem)LanguageBox.SelectedItem).Content;
+
             ResourceDictionary dictionary = new ResourceDictionary
             {
-                Source = new Uri("lang/" + ((ComboBoxItem)LanguageBox.SelectedItem).Content + ".xaml", UriKind.Relative)
+                Source = new Uri("lang/" + language + ".xaml", UriKind.Relative)
             };
 
             // リソースディクショナリを変更
             Resources.MergedDictionaries[0] = dictionary;
+
+            if (!isInitialising)
+            {
+                Settings.Default.Language = language;
+                Settings.Default.Save();
+            }
         }
 
         private void SizeBox_LostFocus(object sender, RoutedEventArgs e)
@@ -688,9 +700,12 @@ namespace ParticleConverter
             Update_ParticleOptionsVisibility();
         }
 
+        /// <summary>The option kind the options box is currently configured for.</summary>
+        private ParticleOptionKind currentOptionKind = ParticleOptionKind.None;
+
         /// <summary>
         /// Shows the options box only for particles that need a value this tool cannot derive
-        /// from the image, and seeds it with something valid.
+        /// from the image, relabels it for that particle, and seeds a valid default.
         /// </summary>
         private void Update_ParticleOptionsVisibility()
         {
@@ -699,28 +714,55 @@ namespace ParticleConverter
             ParticleOptionKind kind = ParticleRegistry.OptionKindOf(ParticleTypeBox.Text);
             bool needsInput = kind == ParticleOptionKind.BlockState
                               || kind == ParticleOptionKind.Item
-                              || kind == ParticleOptionKind.Raw;
+                              || kind == ParticleOptionKind.Raw
+                              || kind == ParticleOptionKind.DustColorTransition;
 
             ParticleOptionsBox.Visibility = needsInput ? Visibility.Visible : Visibility.Collapsed;
 
-            if (needsInput && string.IsNullOrWhiteSpace(ParticleOptionsBox.Text))
+            if (!needsInput || kind == currentOptionKind) return;
+
+            // The kind changed, so the previous value is meaningless here - relabel and reseed
+            // rather than carrying "minecraft:stone" over into a colour field.
+            currentOptionKind = kind;
+            HintAssist.SetHint(ParticleOptionsBox, Resources[HintKeyFor(kind)]);
+            ParticleOptionsBox.Text = DefaultOptionFor(kind);
+        }
+
+        private static string HintKeyFor(ParticleOptionKind kind) => kind switch
+        {
+            ParticleOptionKind.BlockState => "ParticleOptionsBlock",
+            ParticleOptionKind.Item => "ParticleOptionsItem",
+            ParticleOptionKind.DustColorTransition => "ParticleOptionsFade",
+            _ => "ParticleOptions",
+        };
+
+        private static string DefaultOptionFor(ParticleOptionKind kind) => kind switch
+        {
+            ParticleOptionKind.BlockState => "minecraft:stone",
+            ParticleOptionKind.Item => "minecraft:stone",
+            ParticleOptionKind.DustColorTransition => "white",
+            _ => "",
+        };
+
+        /// <summary>Parses a WPF colour string, falling back rather than throwing on bad input.</summary>
+        private static McColor ParseColor(string value, Color fallback)
+        {
+            try
             {
-                ParticleOptionsBox.Text = kind == ParticleOptionKind.Raw ? "" : "minecraft:stone";
+                Color c = (Color)ColorConverter.ConvertFromString(value);
+                return new McColor(c.R, c.G, c.B);
+            }
+            catch
+            {
+                return new McColor(fallback.R, fallback.G, fallback.B);
             }
         }
 
         /// <summary>Builds the command settings that both the preview and the export use.</summary>
         private ParticleCommandSettings BuildCommandSettings()
         {
-            Color fixedColor = Colors.Red;
-            try
-            {
-                fixedColor = (Color)ColorConverter.ConvertFromString(ColorCodeBox.Text);
-            }
-            catch
-            {
-                // An unparseable colour code falls back to red rather than blocking the preview.
-            }
+            // An unparseable colour code falls back rather than blocking the preview.
+            McColor fixedColor = ParseColor(ColorCodeBox.Text, Colors.Red);
 
             double scale = ParticleCommandSettings.MinScale;
             if (double.TryParse(ParticleSizeBox.Text, NumberStyles.Float, format, out double parsed))
@@ -737,10 +779,13 @@ namespace ParticleConverter
                 ParticleId = ParticleTypeBox.Text,
                 Scale = scale,
                 UseFixedColor = UseStaticDustColor.IsChecked == true,
-                FixedColor = new McColor(fixedColor.R, fixedColor.G, fixedColor.B),
+                FixedColor = fixedColor,
                 BlockState = kind == ParticleOptionKind.BlockState && options.Length > 0 ? options : "minecraft:stone",
                 Item = kind == ParticleOptionKind.Item && options.Length > 0 ? options : "minecraft:stone",
                 RawOptions = kind == ParticleOptionKind.Raw ? options : "",
+                TransitionToColor = kind == ParticleOptionKind.DustColorTransition
+                    ? ParseColor(options, Colors.White)
+                    : new McColor(255, 255, 255),
                 CoordinateMode = (string)((ComboBoxItem)CoordinateModeBox.SelectedItem)?.Tag == "Local"
                     ? Minecraft.CoordinateMode.RelativeLocal
                     : Minecraft.CoordinateMode.RelativeWorld,

@@ -213,6 +213,26 @@ namespace ParticleConverter.Tests
         }
 
         [Fact]
+        public void Dust_color_transition_puts_scale_between_the_colours_on_legacy_versions()
+        {
+            // The pre-1.20.5 argument order is from RGB, scale, to RGB - not from, to, scale.
+            ParticleCommandSettings settings = Settings("1.20.4", "dust_color_transition");
+            settings.TransitionToColor = new McColor(0, 0, 255);
+
+            Assert.Contains("minecraft:dust_color_transition 1 0 0 0.75 0 0 1 ",
+                ParticleCommand.Build(0, 0, 0, new McColor(255, 0, 0), settings));
+        }
+
+        [Fact]
+        public void Dust_color_transition_defaults_to_fading_to_white()
+        {
+            ParticleCommandSettings settings = Settings("26.2", "dust_color_transition");
+
+            Assert.Contains("to_color:[1,1,1]",
+                ParticleCommand.Build(0, 0, 0, new McColor(255, 0, 0), settings));
+        }
+
+        [Fact]
         public void Raw_options_are_written_verbatim()
         {
             ParticleCommandSettings settings = Settings("26.2", "shriek");

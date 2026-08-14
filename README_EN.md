@@ -49,6 +49,15 @@ From 1.20.5 the `scale` field is validated by a codec range check of **0.01 - 4.
 4 is not clamped, it is a parse error, so the command silently never runs. This fork raises the
 input cap to the real maximum of 4.
 
+## Usage
+
+[docs/USAGE.md](docs/USAGE.md) walks through the whole workflow on 26.2 — settings, exporting a
+datapack, anchoring the image to an entity, and making it rotate. Worth reading if you're
+following a tutorial made before 1.21, because the datapack folder name and the particle size
+advice in those are now wrong.
+
+[CHANGELOG.md](CHANGELOG.md) lists everything that changed from upstream.
+
 ## Downloads
  [Particle-Converter/Release](https://github.com/kemo14331/Particle-Converter/releases/latest)
 

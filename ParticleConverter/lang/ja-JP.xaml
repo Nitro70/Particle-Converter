@@ -59,6 +59,9 @@
     <system:String x:Key="UsePreview">プレビュー</system:String>
 
     <system:String x:Key="ParticleOptions">パーティクルオプション (SNBT)</system:String>
+    <system:String x:Key="ParticleOptionsBlock">ブロック状態</system:String>
+    <system:String x:Key="ParticleOptionsItem">アイテムID</system:String>
+    <system:String x:Key="ParticleOptionsFade">変化後の色</system:String>
     <system:String x:Key="CommandPreview">生成されるコマンド</system:String>
 
     <system:String x:Key="ExportSettings">出力設定</system:String>

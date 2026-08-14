@@ -59,6 +59,9 @@
     <system:String x:Key="UsePreview">Preview</system:String>
 
     <system:String x:Key="ParticleOptions">Particle Options (SNBT)</system:String>
+    <system:String x:Key="ParticleOptionsBlock">Block state</system:String>
+    <system:String x:Key="ParticleOptionsItem">Item id</system:String>
+    <system:String x:Key="ParticleOptionsFade">Fade to color</system:String>
     <system:String x:Key="CommandPreview">Generated Command</system:String>
 
     <system:String x:Key="ExportSettings">Export Settings</system:String>

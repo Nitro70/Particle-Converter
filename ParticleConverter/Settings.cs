@@ -28,8 +28,12 @@ namespace ParticleConverter
 
         public static Settings Default => _default ??= Load();
 
-        /// <summary>Where exported files are written.</summary>
-        public string FolderPath { get; set; } = "./functions";
+        /// <summary>
+        /// Where exported files are written. Named "output" rather than the old "functions"
+        /// because "functions" is now confusingly close to the datapack's own directory name,
+        /// which went singular in 1.21.
+        /// </summary>
+        public string FolderPath { get; set; } = "./output";
 
         /// <summary>Id of the selected <see cref="Minecraft.McVersionProfile"/>, e.g. "26.2".</summary>
         public string McVersion { get; set; } = Minecraft.McVersionProfile.Latest.Id;
