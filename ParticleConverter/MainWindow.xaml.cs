@@ -59,6 +59,7 @@ namespace ParticleConverter
 
             isInitialising = false;
             Refresh_ParticleTypes();
+            Update_DatapackFieldsEnabled();
             Update_CommandPreview();
         }
 
@@ -637,12 +638,27 @@ namespace ParticleConverter
 
         private void ExportAsDatapackBox_Changed(object sender, RoutedEventArgs e)
         {
-            if (isInitialising || DatapackNamePanel == null) return;
+            if (isInitialising) return;
+
+            Update_DatapackFieldsEnabled();
+            Settings.Default.ExportAsDatapack = ExportAsDatapackBox.IsChecked == true;
+            Settings.Default.Save();
+        }
+
+        /// <summary>
+        /// Greys out only the namespace when exporting a bare file.
+        /// </summary>
+        /// <remarks>
+        /// The function name still applies in bare mode - it is the .mcfunction filename. Only
+        /// the namespace is meaningless without a datapack around it.
+        /// </remarks>
+        private void Update_DatapackFieldsEnabled()
+        {
+            if (NamespaceBox == null) return;
 
             bool asDatapack = ExportAsDatapackBox.IsChecked == true;
-            DatapackNamePanel.IsEnabled = asDatapack;
-            Settings.Default.ExportAsDatapack = asDatapack;
-            Settings.Default.Save();
+            NamespaceBox.IsEnabled = asDatapack;
+            NamespaceSeparator.IsEnabled = asDatapack;
         }
 
         /// <summary>Forces namespace and function name to characters Minecraft allows.</summary>

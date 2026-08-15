@@ -774,6 +774,7 @@
                                 Style="{StaticResource MaterialDesignFloatingHintTextBox}"
                                 Text="particles" />
                             <TextBlock
+                                Name="NamespaceSeparator"
                                 Margin="6,0,6,4"
                                 VerticalAlignment="Bottom"
                                 Foreground="DarkGray"
