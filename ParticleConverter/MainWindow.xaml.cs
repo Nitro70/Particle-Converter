@@ -989,9 +989,11 @@ namespace ParticleConverter
                 ? Resources["ExportedRunThis"]
                 : Resources["ExportedWroteFile"]);
 
+            // Label and value on their own lines - wrapping a single long line inside a narrow
+            // box breaks it at an arbitrary space and looks like a rendering fault.
             ExportResultBox.Text = layout.FunctionReference != null
-                ? $"{label} /function {layout.FunctionReference}"
-                : $"{label} {layout.FunctionPath}";
+                ? $"{label}\n/function {layout.FunctionReference}"
+                : $"{label}\n{layout.FunctionPath}";
             ExportResultBox.Visibility = Visibility.Visible;
         }
 

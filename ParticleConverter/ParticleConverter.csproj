@@ -80,4 +80,9 @@
     <Copy SourceFiles="@(LangFile)" DestinationFolder="$(TargetDir)lang" SkipUnchangedFiles="true" />
   </Target>
 
+  <!-- Publish copies from its own item list, not TargetDir, so this has to be repeated. -->
+  <Target Name="CopyLanguageFilesOnPublish" AfterTargets="Publish">
+    <Copy SourceFiles="@(LangFile)" DestinationFolder="$(PublishDir)lang" SkipUnchangedFiles="true" />
+  </Target>
+
 </Project>

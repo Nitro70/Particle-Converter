@@ -313,11 +313,16 @@
                                         materialDesign:HintAssist.Hint="{DynamicResource HorizontalAlignment}"
                                         materialDesign:HintAssist.IsFloating="True"
                                         Loaded="ComboBox_Loaded">
+                                        <!--
+                                            Centre/bottom rather than left/top. The old defaults
+                                            put the image below and to the right of whatever runs
+                                            the function, so running it where you stand buries it.
+                                        -->
+                                        <ComboBoxItem Content="{DynamicResource Left}" Tag="0" />
                                         <ComboBoxItem
-                                            Content="{DynamicResource Left}"
+                                            Content="{DynamicResource Center}"
                                             IsSelected="True"
-                                            Tag="0" />
-                                        <ComboBoxItem Content="{DynamicResource Center}" Tag="1" />
+                                            Tag="1" />
                                         <ComboBoxItem Content="{DynamicResource Right}" Tag="2" />
                                     </ComboBox>
                                     <ComboBox
@@ -330,12 +335,12 @@
                                         materialDesign:HintAssist.Hint="{DynamicResource VerticalAlignment}"
                                         materialDesign:HintAssist.IsFloating="True"
                                         Loaded="ComboBox_Loaded">
-                                        <ComboBoxItem
-                                            Content="{DynamicResource Top}"
-                                            IsSelected="True"
-                                            Tag="0" />
+                                        <ComboBoxItem Content="{DynamicResource Top}" Tag="0" />
                                         <ComboBoxItem Content="{DynamicResource Center}" Tag="1" />
-                                        <ComboBoxItem Content="{DynamicResource Bottom}" Tag="2" />
+                                        <ComboBoxItem
+                                            Content="{DynamicResource Bottom}"
+                                            IsSelected="True"
+                                            Tag="2" />
                                     </ComboBox>
                                 </StackPanel>
 
@@ -832,8 +837,8 @@
                         <TextBox
                             Name="ExportResultBox"
                             Width="265"
-                            Height="32"
-                            Margin="5,10,0,0"
+                            Height="36"
+                            Margin="5,8,0,0"
                             HorizontalAlignment="Left"
                             Background="Transparent"
                             BorderThickness="0"
@@ -841,7 +846,7 @@
                             FontSize="11"
                             Foreground="{DynamicResource PrimaryHueLightBrush}"
                             IsReadOnly="True"
-                            TextWrapping="Wrap"
+                            TextWrapping="NoWrap"
                             Visibility="Hidden" />
                     </StackPanel>
                 </Grid>
