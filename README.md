@@ -3,6 +3,10 @@
 ![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/kemo14331/Particle-Converter)  [![GitHub license](https://img.shields.io/github/license/kemo14331/Particle-Converter)](https://github.com/kemo14331/Particle-Converter/blob/main/LICENSE)  
 画像ファイルをmcfunctionに変換するツール
 
+**原作者: [Kemo431 (kemo14331)](https://github.com/kemo14331)** — 本リポジトリはMinecraft 26.2に対応させたフォークです。
+設計・UI・変換方式はすべて原作者によるものです([オリジナル](https://github.com/kemo14331/Particle-Converter))。
+原作のMITライセンスのもとで公開しています。
+
 ## ScreenShot
  ![screenshot0](https://imgur.com/SEKM371.jpg,"screenshot")
  <details>

@@ -2,6 +2,11 @@
 ![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/kemo14331/Particle-Converter)  [![GitHub license](https://img.shields.io/github/license/kemo14331/Particle-Converter)](https://github.com/kemo14331/Particle-Converter/blob/main/LICENSE)  
 Particle Converter is an application to convert image files into particle commands.
 
+**Original tool by [Kemo431 (kemo14331)](https://github.com/kemo14331)** — this is a fork that
+brings it up to Minecraft 26.2. All of the design, the UI and the conversion approach are his
+work; see [the original repository](https://github.com/kemo14331/Particle-Converter). Released
+under his original MIT licence.
+
 ## ScreenShot
  ![screenshot0](https://imgur.com/HvnhBgF.jpg,"screenshot")
  <details>
